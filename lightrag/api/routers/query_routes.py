@@ -13,7 +13,10 @@ from pydantic import BaseModel, Field, field_validator
 
 from ascii_colors import trace_exception
 
-router = APIRouter(tags=["query"])
+router = APIRouter(
+    tags=["query"],
+    prefix="/{workspace}"
+)
 
 
 class QueryRequest(BaseModel):
@@ -134,13 +137,13 @@ class QueryResponse(BaseModel):
     )
 
 
-def create_query_routes(rag, api_key: Optional[str] = None, top_k: int = 60):
+def create_query_routes(ragFactory, api_key: Optional[str] = None, top_k: int = 60):
     combined_auth = get_combined_auth_dependency(api_key)
 
     @router.post(
         "/query", response_model=QueryResponse, dependencies=[Depends(combined_auth)]
     )
-    async def query_text(request: QueryRequest):
+    async def query_text(workspace: str, request: QueryRequest):
         """
         Handle a POST request at the /query endpoint to process user queries using RAG capabilities.
 
@@ -156,6 +159,7 @@ def create_query_routes(rag, api_key: Optional[str] = None, top_k: int = 60):
                        with status code 500 and detail containing the exception message.
         """
         try:
+            rag = ragFactory.get(workspace)
             param = request.to_query_params(False)
             response = await rag.aquery(request.query, param=param)
 
@@ -173,7 +177,7 @@ def create_query_routes(rag, api_key: Optional[str] = None, top_k: int = 60):
             raise HTTPException(status_code=500, detail=str(e))
 
     @router.post("/query/stream", dependencies=[Depends(combined_auth)])
-    async def query_text_stream(request: QueryRequest):
+    async def query_text_stream(workspace :str, request: QueryRequest):
         """
         This endpoint performs a retrieval-augmented generation (RAG) query and streams the response.
 
@@ -185,6 +189,7 @@ def create_query_routes(rag, api_key: Optional[str] = None, top_k: int = 60):
             StreamingResponse: A streaming response containing the RAG query results.
         """
         try:
+            rag = ragFactory.get(workspace)
             param = request.to_query_params(True)
             response = await rag.aquery(request.query, param=param)
 

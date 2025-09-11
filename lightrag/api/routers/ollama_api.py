@@ -219,9 +219,9 @@ def parse_query_mode(query: str) -> tuple[str, SearchMode, bool, Optional[str]]:
 
 
 class OllamaAPI:
-    def __init__(self, rag: LightRAG, top_k: int = 60, api_key: Optional[str] = None):
-        self.rag = rag
-        self.ollama_server_infos = rag.ollama_server_infos
+    def __init__(self, ragFactory: LightRAG, top_k: int = 60, api_key: Optional[str] = None):
+        self.ragFactory = ragFactory
+        self.ollama_server_infos = ragFactory.ollama_server_infos
         self.top_k = top_k
         self.api_key = api_key
         self.router = APIRouter(tags=["ollama"])
@@ -301,11 +301,11 @@ class OllamaAPI:
                 prompt_tokens = estimate_tokens(query)
 
                 if request.system:
-                    self.rag.llm_model_kwargs["system_prompt"] = request.system
+                    self.ragFactory.llm_model_kwargs["system_prompt"] = request.system
 
                 if request.stream:
-                    response = await self.rag.llm_model_func(
-                        query, stream=True, **self.rag.llm_model_kwargs
+                    response = await self.ragFactory.llm_model_func(
+                        query, stream=True, **self.ragFactory.llm_model_kwargs
                     )
 
                     async def stream_generator():
@@ -434,8 +434,8 @@ class OllamaAPI:
                     )
                 else:
                     first_chunk_time = time.time_ns()
-                    response_text = await self.rag.llm_model_func(
-                        query, stream=False, **self.rag.llm_model_kwargs
+                    response_text = await self.ragFactory.llm_model_func(
+                        query, stream=False, **self.ragFactory.llm_model_kwargs
                     )
                     last_chunk_time = time.time_ns()
 
@@ -511,10 +511,10 @@ class OllamaAPI:
                     param_dict["user_prompt"] = user_prompt
 
                 if (
-                    hasattr(self.rag, "args")
-                    and self.rag.args.history_turns is not None
+                    hasattr(self.ragFactory, "args")
+                    and self.ragFactory.args.history_turns is not None
                 ):
-                    param_dict["history_turns"] = self.rag.args.history_turns
+                    param_dict["history_turns"] = self.ragFactory.args.history_turns
 
                 query_param = QueryParam(**param_dict)
 
@@ -522,15 +522,15 @@ class OllamaAPI:
                     # Determine if the request is prefix with "/bypass"
                     if mode == SearchMode.bypass:
                         if request.system:
-                            self.rag.llm_model_kwargs["system_prompt"] = request.system
-                        response = await self.rag.llm_model_func(
+                            self.ragFactory.llm_model_kwargs["system_prompt"] = request.system
+                        response = await self.ragFactory.llm_model_func(
                             cleaned_query,
                             stream=True,
                             history_messages=conversation_history,
-                            **self.rag.llm_model_kwargs,
+                            **self.ragFactory.llm_model_kwargs,
                         )
                     else:
-                        response = await self.rag.aquery(
+                        response = await self.ragFactory.aquery(
                             cleaned_query, param=query_param
                         )
 
@@ -689,16 +689,16 @@ class OllamaAPI:
                     )
                     if match_result or mode == SearchMode.bypass:
                         if request.system:
-                            self.rag.llm_model_kwargs["system_prompt"] = request.system
+                            self.ragFactory.llm_model_kwargs["system_prompt"] = request.system
 
-                        response_text = await self.rag.llm_model_func(
+                        response_text = await self.ragFactory.llm_model_func(
                             cleaned_query,
                             stream=False,
                             history_messages=conversation_history,
-                            **self.rag.llm_model_kwargs,
+                            **self.ragFactory.llm_model_kwargs,
                         )
                     else:
-                        response_text = await self.rag.aquery(
+                        response_text = await self.ragFactory.aquery(
                             cleaned_query, param=query_param
                         )
 

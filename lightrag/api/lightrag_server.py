@@ -25,7 +25,8 @@ from lightrag.api.utils_api import (
     display_splash_screen,
     check_env_file,
 )
-from .config import (
+from lightrag.lightrag_factory import LightRAGFactory
+from config import (
     global_args,
     update_uvicorn_mode_config,
     get_default_host,
@@ -66,7 +67,6 @@ from lightrag.api.auth import auth_handler
 # allows to use different .env file for each lightrag instance
 # the OS environment variables take precedence over the .env file
 load_dotenv(dotenv_path=".env", override=False)
-
 
 webui_title = os.getenv("WEBUI_TITLE")
 webui_description = os.getenv("WEBUI_DESCRIPTION")
@@ -206,11 +206,11 @@ def create_app(args):
 
         try:
             # Initialize database connections
-            await rag.initialize_storages()
+            await ragFactory.initialize_storages()
             await initialize_pipeline_status()
 
             # Data migration regardless of storage implementation
-            await rag.check_and_migrate_data()
+            await ragFactory.check_and_migrate_data()
 
             pipeline_status = await get_namespace_data("pipeline_status")
 
@@ -225,7 +225,7 @@ def create_app(args):
             # Only run auto scan when no other process started it first
             if should_start_autoscan:
                 # Create background task
-                task = asyncio.create_task(run_scanning_process(rag, doc_manager))
+                task = asyncio.create_task(run_scanning_process(ragFactory, doc_manager))
                 app.state.background_tasks.add(task)
                 task.add_done_callback(app.state.background_tasks.discard)
                 logger.info(f"Process {os.getpid()} auto scan task started at startup.")
@@ -236,7 +236,7 @@ def create_app(args):
 
         finally:
             # Clean up database connections
-            await rag.finalize_storages()
+            await ragFactory.finalize_storages()
 
             # Clean up shared data
             finalize_share_data()
@@ -291,16 +291,16 @@ def create_app(args):
     Path(args.working_dir).mkdir(parents=True, exist_ok=True)
 
     def create_optimized_openai_llm_func(
-        config_cache: LLMConfigCache, args, llm_timeout: int
+            config_cache: LLMConfigCache, args, llm_timeout: int
     ):
         """Create optimized OpenAI LLM function with pre-processed configuration"""
 
         async def optimized_openai_alike_model_complete(
-            prompt,
-            system_prompt=None,
-            history_messages=None,
-            keyword_extraction=False,
-            **kwargs,
+                prompt,
+                system_prompt=None,
+                history_messages=None,
+                keyword_extraction=False,
+                **kwargs,
         ) -> str:
             from lightrag.llm.openai import openai_complete_if_cache
 
@@ -328,16 +328,16 @@ def create_app(args):
         return optimized_openai_alike_model_complete
 
     def create_optimized_azure_openai_llm_func(
-        config_cache: LLMConfigCache, args, llm_timeout: int
+            config_cache: LLMConfigCache, args, llm_timeout: int
     ):
         """Create optimized Azure OpenAI LLM function with pre-processed configuration"""
 
         async def optimized_azure_openai_model_complete(
-            prompt,
-            system_prompt=None,
-            history_messages=None,
-            keyword_extraction=False,
-            **kwargs,
+                prompt,
+                system_prompt=None,
+                history_messages=None,
+                keyword_extraction=False,
+                **kwargs,
         ) -> str:
             from lightrag.llm.azure_openai import azure_openai_complete_if_cache
 
@@ -412,7 +412,7 @@ def create_app(args):
         return {}
 
     def create_optimized_embedding_function(
-        config_cache: LLMConfigCache, binding, model, host, api_key, dimensions, args
+            config_cache: LLMConfigCache, binding, model, host, api_key, dimensions, args
     ):
         """
         Create optimized embedding function with pre-processed configuration for applicable bindings.
@@ -477,11 +477,11 @@ def create_app(args):
     )
 
     async def bedrock_model_complete(
-        prompt,
-        system_prompt=None,
-        history_messages=None,
-        keyword_extraction=False,
-        **kwargs,
+            prompt,
+            system_prompt=None,
+            history_messages=None,
+            keyword_extraction=False,
+            **kwargs,
     ) -> str:
         # Lazy import
         from lightrag.llm.bedrock import bedrock_complete_if_cache
@@ -552,7 +552,7 @@ def create_app(args):
                     args.rerank_binding_host = default_base_url
 
         async def server_rerank_func(
-            query: str, documents: list, top_n: int = None, extra_body: dict = None
+                query: str, documents: list, top_n: int = None, extra_body: dict = None
         ):
             """Server rerank function with configuration from environment variables"""
             return await selected_rerank_func(
@@ -581,57 +581,58 @@ def create_app(args):
 
     # Initialize RAG with unified configuration
     try:
-        rag = LightRAG(
+        ragFactory = LightRAGFactory(
             working_dir=args.working_dir,
-            workspace=args.workspace,
-            llm_model_func=create_llm_model_func(args.llm_binding),
-            llm_model_name=args.llm_model,
-            llm_model_max_async=args.max_async,
-            summary_max_tokens=args.summary_max_tokens,
-            summary_context_size=args.summary_context_size,
-            chunk_token_size=int(args.chunk_size),
-            chunk_overlap_token_size=int(args.chunk_overlap_size),
-            llm_model_kwargs=create_llm_model_kwargs(
-                args.llm_binding, args, llm_timeout
-            ),
-            embedding_func=embedding_func,
-            default_llm_timeout=llm_timeout,
-            default_embedding_timeout=embedding_timeout,
-            kv_storage=args.kv_storage,
-            graph_storage=args.graph_storage,
-            vector_storage=args.vector_storage,
-            doc_status_storage=args.doc_status_storage,
-            vector_db_storage_cls_kwargs={
-                "cosine_better_than_threshold": args.cosine_threshold
-            },
-            enable_llm_cache_for_entity_extract=args.enable_llm_cache_for_extract,
-            enable_llm_cache=args.enable_llm_cache,
-            rerank_model_func=rerank_model_func,
-            max_parallel_insert=args.max_parallel_insert,
-            max_graph_nodes=args.max_graph_nodes,
-            addon_params={
-                "language": args.summary_language,
-                "entity_types": args.entity_types,
-            },
-            ollama_server_infos=ollama_server_infos,
+            lightrag_args={
+                "llm_model_func": create_llm_model_func(args.llm_binding),
+                "llm_model_name": args.llm_model,
+                "llm_model_max_async": args.max_async,
+                "summary_max_tokens": args.summary_max_tokens,
+                "summary_context_size": args.summary_context_size,
+                "chunk_token_size": int(args.chunk_size),
+                "chunk_overlap_token_size": int(args.chunk_overlap_size),
+                "llm_model_kwargs": create_llm_model_kwargs(
+                    args.llm_binding, args, llm_timeout
+                ),
+                "embedding_func": embedding_func,
+                "default_llm_timeout": llm_timeout,
+                "default_embedding_timeout": embedding_timeout,
+                "kv_storage": args.kv_storage,
+                "graph_storage": args.graph_storage,
+                "vector_storage": args.vector_storage,
+                "doc_status_storage": args.doc_status_storage,
+                "vector_db_storage_cls_kwargs": {
+                    "cosine_better_than_threshold": args.cosine_threshold
+                },
+                "enable_llm_cache_for_entity_extract": args.enable_llm_cache_for_extract,
+                "enable_llm_cache": args.enable_llm_cache,
+                "rerank_model_func": rerank_model_func,
+                "max_parallel_insert": args.max_parallel_insert,
+                "max_graph_nodes": args.max_graph_nodes,
+                "addon_params": {
+                    "language": args.summary_language,
+                    "entity_types": args.entity_types,
+                },
+                "ollama_server_infos": ollama_server_infos,
+            }
         )
     except Exception as e:
-        logger.error(f"Failed to initialize LightRAG: {e}")
+        logger.error(f"Failed to initialize LightRAGFactory: {e}")
         raise
 
     # Add routes
     app.include_router(
         create_document_routes(
-            rag,
+            ragFactory,
             doc_manager,
             api_key,
         )
     )
-    app.include_router(create_query_routes(rag, api_key, args.top_k))
-    app.include_router(create_graph_routes(rag, api_key))
+    app.include_router(create_query_routes(ragFactory, api_key, args.top_k))
+    app.include_router(create_graph_routes(ragFactory, api_key))
 
     # Add Ollama API routes
-    ollama_api = OllamaAPI(rag, top_k=args.top_k, api_key=api_key)
+    ollama_api = OllamaAPI(ragFactory, top_k=args.top_k, api_key=api_key)
     app.include_router(ollama_api.router, prefix="/api")
 
     @app.get("/")
@@ -783,7 +784,7 @@ def create_app(args):
                 response.headers["Pragma"] = "no-cache"
                 response.headers["Expires"] = "0"
             elif (
-                "/assets/" in path
+                    "/assets/" in path
             ):  # Assets (JS, CSS, images, fonts) generated by Vite with hash in filename
                 response.headers["Cache-Control"] = (
                     "public, max-age=31536000, immutable"

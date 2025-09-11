@@ -10,7 +10,9 @@ from pydantic import BaseModel
 from lightrag.utils import logger
 from ..utils_api import get_combined_auth_dependency
 
-router = APIRouter(tags=["graph"])
+router = APIRouter(
+    tags=["graph"],
+    prefix="/{workspace}")
 
 
 class EntityUpdateRequest(BaseModel):
@@ -25,11 +27,11 @@ class RelationUpdateRequest(BaseModel):
     updated_data: Dict[str, Any]
 
 
-def create_graph_routes(rag, api_key: Optional[str] = None):
+def create_graph_routes(ragFactory, api_key: Optional[str] = None):
     combined_auth = get_combined_auth_dependency(api_key)
 
     @router.get("/graph/label/list", dependencies=[Depends(combined_auth)])
-    async def get_graph_labels():
+    async def get_graph_labels(workspace : str):
         """
         Get all graph labels
 
@@ -37,6 +39,7 @@ def create_graph_routes(rag, api_key: Optional[str] = None):
             List[str]: List of graph labels
         """
         try:
+            rag = ragFactory.get(workspace)
             return await rag.get_graph_labels()
         except Exception as e:
             logger.error(f"Error getting graph labels: {str(e)}")
@@ -47,6 +50,7 @@ def create_graph_routes(rag, api_key: Optional[str] = None):
 
     @router.get("/graphs", dependencies=[Depends(combined_auth)])
     async def get_knowledge_graph(
+        workspace : str,
         label: str = Query(..., description="Label to get knowledge graph for"),
         max_depth: int = Query(3, description="Maximum depth of graph", ge=1),
         max_nodes: int = Query(1000, description="Maximum nodes to return", ge=1),
@@ -66,6 +70,7 @@ def create_graph_routes(rag, api_key: Optional[str] = None):
             Dict[str, List[str]]: Knowledge graph for label
         """
         try:
+            rag = ragFactory.get(workspace)
             # Log the label parameter to check for leading spaces
             logger.debug(
                 f"get_knowledge_graph called with label: '{label}' (length: {len(label)}, repr: {repr(label)})"
@@ -85,6 +90,8 @@ def create_graph_routes(rag, api_key: Optional[str] = None):
 
     @router.get("/graph/entity/exists", dependencies=[Depends(combined_auth)])
     async def check_entity_exists(
+
+        workspace : str,
         name: str = Query(..., description="Entity name to check"),
     ):
         """
@@ -97,6 +104,7 @@ def create_graph_routes(rag, api_key: Optional[str] = None):
             Dict[str, bool]: Dictionary with 'exists' key indicating if entity exists
         """
         try:
+            rag = ragFactory.get(workspace)
             exists = await rag.chunk_entity_relation_graph.has_node(name)
             return {"exists": exists}
         except Exception as e:
@@ -107,7 +115,7 @@ def create_graph_routes(rag, api_key: Optional[str] = None):
             )
 
     @router.post("/graph/entity/edit", dependencies=[Depends(combined_auth)])
-    async def update_entity(request: EntityUpdateRequest):
+    async def update_entity(workspace: str,  request: EntityUpdateRequest):
         """
         Update an entity's properties in the knowledge graph
 
@@ -118,6 +126,7 @@ def create_graph_routes(rag, api_key: Optional[str] = None):
             Dict: Updated entity information
         """
         try:
+            rag = ragFactory.get(workspace)
             result = await rag.aedit_entity(
                 entity_name=request.entity_name,
                 updated_data=request.updated_data,
@@ -141,7 +150,7 @@ def create_graph_routes(rag, api_key: Optional[str] = None):
             )
 
     @router.post("/graph/relation/edit", dependencies=[Depends(combined_auth)])
-    async def update_relation(request: RelationUpdateRequest):
+    async def update_relation(workspace: str, request: RelationUpdateRequest):
         """Update a relation's properties in the knowledge graph
 
         Args:
@@ -151,6 +160,7 @@ def create_graph_routes(rag, api_key: Optional[str] = None):
             Dict: Updated relation information
         """
         try:
+            rag = ragFactory.get(workspace)
             result = await rag.aedit_relation(
                 source_entity=request.source_id,
                 target_entity=request.target_id,

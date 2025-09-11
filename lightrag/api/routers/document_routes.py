@@ -26,6 +26,7 @@ from lightrag.base import DeletionResult, DocProcessingStatus, DocStatus
 from lightrag.utils import generate_track_id
 from lightrag.api.utils_api import get_combined_auth_dependency
 from ..config import global_args
+from ...lightrag_factory import LightRAGFactory
 
 
 # Function to format datetime to ISO format string with timezone information
@@ -54,7 +55,7 @@ def format_datetime(dt: Any) -> Optional[str]:
 
 
 router = APIRouter(
-    prefix="/documents",
+    prefix="/{workspace}/documents",
     tags=["documents"],
 )
 
@@ -1554,7 +1555,7 @@ async def background_delete_documents(
 
 
 def create_document_routes(
-    rag: LightRAG, doc_manager: DocumentManager, api_key: Optional[str] = None
+    ragFactory: LightRAGFactory, doc_manager: DocumentManager, api_key: Optional[str] = None
 ):
     # Create combined auth dependency for document routes
     combined_auth = get_combined_auth_dependency(api_key)
@@ -1562,7 +1563,7 @@ def create_document_routes(
     @router.post(
         "/scan", response_model=ScanResponse, dependencies=[Depends(combined_auth)]
     )
-    async def scan_for_new_documents(background_tasks: BackgroundTasks):
+    async def scan_for_new_documents(workspace: str, background_tasks: BackgroundTasks):
         """
         Trigger the scanning process for new documents.
 
@@ -1574,6 +1575,7 @@ def create_document_routes(
             ScanResponse: A response object containing the scanning status and track_id
         """
         # Generate track_id with "scan" prefix for scanning operation
+        rag = ragFactory.get(workspace)
         track_id = generate_track_id("scan")
 
         # Start the scanning process in the background with track_id
@@ -1588,7 +1590,7 @@ def create_document_routes(
         "/upload", response_model=InsertResponse, dependencies=[Depends(combined_auth)]
     )
     async def upload_to_input_dir(
-        background_tasks: BackgroundTasks, file: UploadFile = File(...)
+        workspace: str, background_tasks: BackgroundTasks, file: UploadFile = File(...)
     ):
         """
         Upload a file to the input directory and index it.
@@ -1609,6 +1611,7 @@ def create_document_routes(
             HTTPException: If the file type is not supported (400) or other errors occur (500).
         """
         try:
+            rag = ragFactory.get(workspace)
             # Sanitize filename to prevent Path Traversal attacks
             safe_filename = sanitize_filename(file.filename, doc_manager.input_dir)
 
@@ -1650,7 +1653,7 @@ def create_document_routes(
         "/text", response_model=InsertResponse, dependencies=[Depends(combined_auth)]
     )
     async def insert_text(
-        request: InsertTextRequest, background_tasks: BackgroundTasks
+        workspace: str, request: InsertTextRequest, background_tasks: BackgroundTasks
     ):
         """
         Insert text into the RAG system.
@@ -1669,6 +1672,7 @@ def create_document_routes(
             HTTPException: If an error occurs during text processing (500).
         """
         try:
+            rag = ragFactory.get(workspace)
             # Generate track_id for text insertion
             track_id = generate_track_id("insert")
 
@@ -1696,7 +1700,7 @@ def create_document_routes(
         dependencies=[Depends(combined_auth)],
     )
     async def insert_texts(
-        request: InsertTextsRequest, background_tasks: BackgroundTasks
+        workspace: str, request: InsertTextsRequest, background_tasks: BackgroundTasks
     ):
         """
         Insert multiple texts into the RAG system.
@@ -1715,6 +1719,7 @@ def create_document_routes(
             HTTPException: If an error occurs during text processing (500).
         """
         try:
+            rag = ragFactory.get(workspace)
             # Generate track_id for texts insertion
             track_id = generate_track_id("insert")
 
@@ -1739,7 +1744,7 @@ def create_document_routes(
     @router.delete(
         "", response_model=ClearDocumentsResponse, dependencies=[Depends(combined_auth)]
     )
-    async def clear_documents():
+    async def clear_documents(workspace: str):
         """
         Clear all documents from the RAG system.
 
@@ -1760,6 +1765,7 @@ def create_document_routes(
             HTTPException: Raised when a serious error occurs during the clearing process,
                           with status code 500 and error details in the detail field.
         """
+        rag = ragFactory.get(workspace)
         from lightrag.kg.shared_storage import (
             get_namespace_data,
             get_pipeline_status_lock,
@@ -1929,7 +1935,7 @@ def create_document_routes(
         dependencies=[Depends(combined_auth)],
         response_model=PipelineStatusResponse,
     )
-    async def get_pipeline_status() -> PipelineStatusResponse:
+    async def get_pipeline_status(workspace: str) -> PipelineStatusResponse:
         """
         Get the current status of the document indexing pipeline.
 
@@ -1954,6 +1960,7 @@ def create_document_routes(
             HTTPException: If an error occurs while retrieving pipeline status (500)
         """
         try:
+            rag = ragFactory.get(workspace)
             from lightrag.kg.shared_storage import (
                 get_namespace_data,
                 get_all_update_flags_status,
@@ -2020,7 +2027,7 @@ def create_document_routes(
     @router.get(
         "", response_model=DocsStatusesResponse, dependencies=[Depends(combined_auth)]
     )
-    async def documents() -> DocsStatusesResponse:
+    async def documents(workspace: str) -> DocsStatusesResponse:
         """
         Get the status of all documents in the system.
 
@@ -2036,6 +2043,7 @@ def create_document_routes(
             HTTPException: If an error occurs while retrieving document statuses (500).
         """
         try:
+            rag = ragFactory.get(workspace)
             statuses = (
                 DocStatus.PENDING,
                 DocStatus.PROCESSING,
@@ -2090,6 +2098,7 @@ def create_document_routes(
         summary="Delete a document and all its associated data by its ID.",
     )
     async def delete_document(
+        workspace: str,
         delete_request: DeleteDocRequest,
         background_tasks: BackgroundTasks,
     ) -> DeleteDocByIdResponse:
@@ -2117,6 +2126,7 @@ def create_document_routes(
             HTTPException:
               - 500: If an unexpected internal error occurs during initialization.
         """
+        rag = ragFactory.get(workspace)
         doc_ids = delete_request.doc_ids
 
         # The rag object is initialized from the server startup args,
@@ -2167,7 +2177,7 @@ def create_document_routes(
         response_model=ClearCacheResponse,
         dependencies=[Depends(combined_auth)],
     )
-    async def clear_cache(request: ClearCacheRequest):
+    async def clear_cache(workspace: str, request: ClearCacheRequest):
         """
         Clear all cache data from the LLM response cache storage.
 
@@ -2184,6 +2194,7 @@ def create_document_routes(
             HTTPException: If an error occurs during cache clearing (500).
         """
         try:
+            rag = ragFactory.get(workspace)
             # Call the aclear_cache method (no modes parameter)
             await rag.aclear_cache()
 
@@ -2201,7 +2212,7 @@ def create_document_routes(
         response_model=DeletionResult,
         dependencies=[Depends(combined_auth)],
     )
-    async def delete_entity(request: DeleteEntityRequest):
+    async def delete_entity(workspace: str, request: DeleteEntityRequest):
         """
         Delete an entity and all its relationships from the knowledge graph.
 
@@ -2215,6 +2226,7 @@ def create_document_routes(
             HTTPException: If the entity is not found (404) or an error occurs (500).
         """
         try:
+            rag = ragFactory.get(workspace)
             result = await rag.adelete_by_entity(entity_name=request.entity_name)
             if result.status == "not_found":
                 raise HTTPException(status_code=404, detail=result.message)
@@ -2236,7 +2248,7 @@ def create_document_routes(
         response_model=DeletionResult,
         dependencies=[Depends(combined_auth)],
     )
-    async def delete_relation(request: DeleteRelationRequest):
+    async def delete_relation(workspace: str, request: DeleteRelationRequest):
         """
         Delete a relationship between two entities from the knowledge graph.
 
@@ -2250,6 +2262,7 @@ def create_document_routes(
             HTTPException: If the relation is not found (404) or an error occurs (500).
         """
         try:
+            rag = ragFactory.get(workspace)
             result = await rag.adelete_by_relation(
                 source_entity=request.source_entity,
                 target_entity=request.target_entity,
@@ -2274,7 +2287,7 @@ def create_document_routes(
         response_model=TrackStatusResponse,
         dependencies=[Depends(combined_auth)],
     )
-    async def get_track_status(track_id: str) -> TrackStatusResponse:
+    async def get_track_status(workspace: str, track_id: str) -> TrackStatusResponse:
         """
         Get the processing status of documents by tracking ID.
 
@@ -2294,6 +2307,7 @@ def create_document_routes(
             HTTPException: If track_id is invalid (400) or an error occurs (500).
         """
         try:
+            rag = ragFactory.get(workspace)
             # Validate track_id
             if not track_id or not track_id.strip():
                 raise HTTPException(status_code=400, detail="Track ID cannot be empty")
@@ -2349,6 +2363,7 @@ def create_document_routes(
         dependencies=[Depends(combined_auth)],
     )
     async def get_documents_paginated(
+        workspace: str,
         request: DocumentsRequest,
     ) -> PaginatedDocsResponse:
         """
@@ -2371,6 +2386,7 @@ def create_document_routes(
             HTTPException: If an error occurs while retrieving documents (500).
         """
         try:
+            rag = ragFactory.get(workspace)
             # Get paginated documents and status counts in parallel
             docs_task = rag.doc_status.get_docs_paginated(
                 status_filter=request.status_filter,
@@ -2435,7 +2451,7 @@ def create_document_routes(
         response_model=StatusCountsResponse,
         dependencies=[Depends(combined_auth)],
     )
-    async def get_document_status_counts() -> StatusCountsResponse:
+    async def get_document_status_counts(workspace: str) -> StatusCountsResponse:
         """
         Get counts of documents by status.
 
@@ -2449,6 +2465,7 @@ def create_document_routes(
             HTTPException: If an error occurs while retrieving status counts (500).
         """
         try:
+            rag = ragFactory.get(workspace)
             status_counts = await rag.doc_status.get_all_status_counts()
             return StatusCountsResponse(status_counts=status_counts)
 
