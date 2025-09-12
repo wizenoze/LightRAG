@@ -1,6 +1,8 @@
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional, Type
+
+from lightrag.lightrag_factory import LightRAGFactory
 from lightrag.utils import logger
 import time
 import json
@@ -219,7 +221,7 @@ def parse_query_mode(query: str) -> tuple[str, SearchMode, bool, Optional[str]]:
 
 
 class OllamaAPI:
-    def __init__(self, ragFactory: LightRAG, top_k: int = 60, api_key: Optional[str] = None):
+    def __init__(self, ragFactory: LightRAGFactory, top_k: int = 60, api_key: Optional[str] = None):
         self.ragFactory = ragFactory
         self.ollama_server_infos = ragFactory.ollama_server_infos
         self.top_k = top_k

@@ -114,7 +114,7 @@ _DEFAULT_WORKSPACE_NAME : str  = "_DEFAULT_"
 @final
 @dataclass
 class LightRAGFactory:
-    lightrag_args: field(default_factory=dict)
+    lightrag_args: dict = field(default_factory=dict)
 
     working_dir: str = field(default="./rag_storage")
     """Directory where cache and temporary files are stored."""
@@ -133,7 +133,6 @@ class LightRAGFactory:
         if self.ollama_server_infos is None:
             self.ollama_server_infos = OllamaServerInfos()
         initialize_share_data()
-        self.create(workspace=_DEFAULT_WORKSPACE_NAME, reuse=True)
 
     def _build_kwargs(self, workspace: str) -> dict[str, Any]:
         args = dict(self.lightrag_args)
@@ -149,7 +148,7 @@ class LightRAGFactory:
             return os.path.join(base_dir, workspace)
         return base_dir
 
-    def create(
+    async def create(
             self,
             workspace: str,
             reuse: bool = False,
@@ -162,27 +161,26 @@ class LightRAGFactory:
         """
         if reuse and workspace in self._instances:
             return self._instances[workspace]
+
         kwargs = self._build_kwargs(workspace)
         instance = LightRAG(**kwargs)
-        async def asyncinit_storages():
-            await instance.initialize_storages()
-        asyncio.run(asyncinit_storages())
+        await instance.initialize_storages()
+
         if reuse:
             self._instances[workspace] = instance
 
         return instance
 
-    def get(self, workspace: str) -> LightRAG:
+    async def get(self, workspace: str) -> LightRAG:
         """
         Get a cached LightRAG instance for the workspace, creating it if needed.
         """
         if workspace in self._instances:
             return self._instances[workspace]
-        return self.create(workspace, reuse=True)
+        return await self.create(workspace, reuse=True)
 
-    async def getDefault(self) -> LightRAG:
-        self.get(_DEFAULT_WORKSPACE_NAME)
-
+    async def get_default(self) -> LightRAG:
+        return await self.get(_DEFAULT_WORKSPACE_NAME)
 
     async def initialize_storages(self):
         for instance in self._instances.values():
@@ -194,8 +192,9 @@ class LightRAGFactory:
 
     async def finalize_storages(self):
         for instance in self._instances.values():
-            instance.finalize_storages()
+            await instance.finalize_storages()
 
+    # TODO: What was this intended to do?
     def effective_workspace(workspace : str) -> str :
         workspace
 

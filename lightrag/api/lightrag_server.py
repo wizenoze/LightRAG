@@ -206,11 +206,11 @@ def create_app(args):
 
         try:
             # Initialize database connections
-            await ragFactory.initialize_storages()
+            await rag_factory.initialize_storages()
             await initialize_pipeline_status()
 
             # Data migration regardless of storage implementation
-            await ragFactory.check_and_migrate_data()
+            await rag_factory.check_and_migrate_data()
 
             pipeline_status = await get_namespace_data("pipeline_status")
 
@@ -225,7 +225,7 @@ def create_app(args):
             # Only run auto scan when no other process started it first
             if should_start_autoscan:
                 # Create background task
-                task = asyncio.create_task(run_scanning_process(ragFactory, doc_manager))
+                task = asyncio.create_task(run_scanning_process(rag_factory, doc_manager))
                 app.state.background_tasks.add(task)
                 task.add_done_callback(app.state.background_tasks.discard)
                 logger.info(f"Process {os.getpid()} auto scan task started at startup.")
@@ -236,7 +236,7 @@ def create_app(args):
 
         finally:
             # Clean up database connections
-            await ragFactory.finalize_storages()
+            await rag_factory.finalize_storages()
 
             # Clean up shared data
             finalize_share_data()
@@ -581,7 +581,7 @@ def create_app(args):
 
     # Initialize RAG with unified configuration
     try:
-        ragFactory = LightRAGFactory(
+        rag_factory = LightRAGFactory(
             working_dir=args.working_dir,
             lightrag_args={
                 "llm_model_func": create_llm_model_func(args.llm_binding),
@@ -623,16 +623,16 @@ def create_app(args):
     # Add routes
     app.include_router(
         create_document_routes(
-            ragFactory,
+            rag_factory,
             doc_manager,
             api_key,
         )
     )
-    app.include_router(create_query_routes(ragFactory, api_key, args.top_k))
-    app.include_router(create_graph_routes(ragFactory, api_key))
+    app.include_router(create_query_routes(rag_factory, api_key, args.top_k))
+    app.include_router(create_graph_routes(rag_factory, api_key))
 
     # Add Ollama API routes
-    ollama_api = OllamaAPI(ragFactory, top_k=args.top_k, api_key=api_key)
+    ollama_api = OllamaAPI(rag_factory, top_k=args.top_k, api_key=api_key)
     app.include_router(ollama_api.router, prefix="/api")
 
     @app.get("/")
