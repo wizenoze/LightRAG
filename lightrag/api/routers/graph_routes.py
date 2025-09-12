@@ -27,7 +27,7 @@ class RelationUpdateRequest(BaseModel):
     updated_data: Dict[str, Any]
 
 
-def create_graph_routes(ragFactory, api_key: Optional[str] = None):
+def create_graph_routes(rag_factory, api_key: Optional[str] = None):
     combined_auth = get_combined_auth_dependency(api_key)
 
     @router.get("/graph/label/list", dependencies=[Depends(combined_auth)])
@@ -39,7 +39,7 @@ def create_graph_routes(ragFactory, api_key: Optional[str] = None):
             List[str]: List of graph labels
         """
         try:
-            rag = ragFactory.get(workspace)
+            rag = await rag_factory.get(workspace)
             return await rag.get_graph_labels()
         except Exception as e:
             logger.error(f"Error getting graph labels: {str(e)}")
@@ -70,7 +70,7 @@ def create_graph_routes(ragFactory, api_key: Optional[str] = None):
             Dict[str, List[str]]: Knowledge graph for label
         """
         try:
-            rag = ragFactory.get(workspace)
+            rag = await rag_factory.get(workspace)
             # Log the label parameter to check for leading spaces
             logger.debug(
                 f"get_knowledge_graph called with label: '{label}' (length: {len(label)}, repr: {repr(label)})"
@@ -104,7 +104,7 @@ def create_graph_routes(ragFactory, api_key: Optional[str] = None):
             Dict[str, bool]: Dictionary with 'exists' key indicating if entity exists
         """
         try:
-            rag = ragFactory.get(workspace)
+            rag = await rag_factory.get(workspace)
             exists = await rag.chunk_entity_relation_graph.has_node(name)
             return {"exists": exists}
         except Exception as e:
@@ -126,7 +126,7 @@ def create_graph_routes(ragFactory, api_key: Optional[str] = None):
             Dict: Updated entity information
         """
         try:
-            rag = ragFactory.get(workspace)
+            rag = await rag_factory.get(workspace)
             result = await rag.aedit_entity(
                 entity_name=request.entity_name,
                 updated_data=request.updated_data,
@@ -160,7 +160,7 @@ def create_graph_routes(ragFactory, api_key: Optional[str] = None):
             Dict: Updated relation information
         """
         try:
-            rag = ragFactory.get(workspace)
+            rag = await rag_factory.get(workspace)
             result = await rag.aedit_relation(
                 source_entity=request.source_id,
                 target_entity=request.target_id,

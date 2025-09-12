@@ -137,7 +137,7 @@ class QueryResponse(BaseModel):
     )
 
 
-def create_query_routes(ragFactory, api_key: Optional[str] = None, top_k: int = 60):
+def create_query_routes(rag_factory, api_key: Optional[str] = None, top_k: int = 60):
     combined_auth = get_combined_auth_dependency(api_key)
 
     @router.post(
@@ -159,7 +159,7 @@ def create_query_routes(ragFactory, api_key: Optional[str] = None, top_k: int = 
                        with status code 500 and detail containing the exception message.
         """
         try:
-            rag = ragFactory.get(workspace)
+            rag = await rag_factory.get(workspace)
             param = request.to_query_params(False)
             response = await rag.aquery(request.query, param=param)
 
@@ -189,7 +189,7 @@ def create_query_routes(ragFactory, api_key: Optional[str] = None, top_k: int = 
             StreamingResponse: A streaming response containing the RAG query results.
         """
         try:
-            rag = ragFactory.get(workspace)
+            rag = await rag_factory.get(workspace)
             param = request.to_query_params(True)
             response = await rag.aquery(request.query, param=param)
 

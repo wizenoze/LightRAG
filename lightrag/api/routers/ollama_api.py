@@ -221,9 +221,9 @@ def parse_query_mode(query: str) -> tuple[str, SearchMode, bool, Optional[str]]:
 
 
 class OllamaAPI:
-    def __init__(self, ragFactory: LightRAGFactory, top_k: int = 60, api_key: Optional[str] = None):
-        self.ragFactory = ragFactory
-        self.ollama_server_infos = ragFactory.ollama_server_infos
+    def __init__(self, rag_factory: LightRAGFactory, top_k: int = 60, api_key: Optional[str] = None):
+        self.ragFactory = rag_factory
+        self.ollama_server_infos = rag_factory.ollama_server_infos
         self.top_k = top_k
         self.api_key = api_key
         self.router = APIRouter(tags=["ollama"])
