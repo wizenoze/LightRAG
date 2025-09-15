@@ -71,7 +71,7 @@ async def _ollama_model_if_cache(
         messages.extend(history_messages)
         messages.append({"role": "user", "content": prompt})
 
-        response = await ollama_client.chat(model=model, messages=messages, **kwargs)
+        response = await ollama_client.chat(model=model, messages=messages, **kwargs, think='low')
         if stream:
             """cannot cache stream response and process reasoning"""
 
